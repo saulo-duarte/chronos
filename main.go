@@ -10,12 +10,26 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	chiadapter "github.com/awslabs/aws-lambda-go-api-proxy/chi"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/saulo-duarte/chronos-lambda/internal/container"
+	"github.com/saulo-duarte/chronos-lambda/internal/router"
 )
 
 var chiLambda *chiadapter.ChiLambdaV2
 var chiRouter *chi.Mux
 
 func init() {
+	c := container.New()
+
+	r := router.New(router.RouterConfig{
+		UserHandler:         c.UserContainer.Handler,
+		ProjectHandler:      c.ProjectContainer.Handler,
+		TaskHandler:         c.TaskContainer.Handler,
+		StudySubjectHandler: c.StudySubjectContainer.Handler,
+		StudyTopicHandler:   c.StudyTopicContainer.Handler,
+	})
+
+	chiRouter = r.(*chi.Mux)
 
 	chiLambda = chiadapter.NewV2(chiRouter)
 }
