@@ -1,0 +1,105 @@
+name: "Terraform"
+
+on:
+  workflow_call:
+    inputs:
+      aws-region:
+        type: string
+        required: true
+      lambda-function-name:
+        type: string
+        required: false
+        default: "chronos-api"
+      parameter-store-key:
+        type: string
+        required: false
+        default: "/chronos-api/latest-version"
+    secrets:
+      aws-assume-role-arn:
+        required: true
+      aws-statefile-s3-bucket:
+        required: true
+      lambda-s3-bucket:
+        required: true
+      lambda-s3-key:
+        required: true
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws-assume-role-arn }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.23
+
+      - name: Build Go Lambda
+        run: |
+          mkdir -p infra
+          CGO_ENABLED=0 \
+          GOOS=linux \
+          GOARCH=amd64 \
+          go build -ldflags="-s -w -extldflags '-static'" -o bootstrap main.go
+          zip infra/bootstrap.zip bootstrap
+
+      - name: Upload Lambda to S3
+        run: |
+          aws s3 cp infra/bootstrap.zip s3://${{ secrets.lambda-s3-bucket }}/${{ secrets.lambda-s3-key }} --region ${{ inputs.aws-region }}
+
+      - name: Read destroy configuration
+        id: read-destroy-config
+        run: |
+          DESTROY="$(jq -r '.destroy' ./terraform/destroy-config.json)"
+          echo "destroy=$(echo $DESTROY)" >> $GITHUB_OUTPUT
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform Init
+        run: |
+          cd terraform && terraform init \
+            -backend-config="bucket=${{ secrets.aws-statefile-s3-bucket }}" \
+            -backend-config="key=${{ github.event.repository.name }}.tfstate" \
+            -backend-config="region=${{ inputs.aws-region }}"
+
+      - name: Terraform Validate
+        run: cd terraform && terraform validate
+
+      - name: Terraform Destroy
+        if: steps.read-destroy-config.outputs.destroy == 'true'
+        run: cd terraform && terraform destroy -auto-approve \
+            -var="region=${{ inputs.aws-region }}" \
+            -var="lambda_function_name=${{ inputs.lambda-function-name }}" \
+            -var="s3_bucket=${{ secrets.lambda-s3-bucket }}" \
+            -var="s3_key=${{ secrets.lambda-s3-key }}" \
+            -var="parameter_store_key=${{ inputs.parameter-store-key }}"
+
+      - name: Terraform Plan
+        if: steps.read-destroy-config.outputs.destroy != 'true'
+        run: |
+          terraform -chdir=terraform plan -out="plan.tfplan" \
+            -var="region=${{ inputs.aws-region }}" \
+            -var="lambda_function_name=${{ inputs.lambda-function-name }}" \
+            -var="s3_bucket=${{ secrets.lambda-s3-bucket }}" \
+            -var="s3_key=${{ secrets.lambda-s3-key }}" \
+            -var="parameter_store_key=${{ inputs.parameter-store-key }}"
+
+      - name: Terraform Apply
+        if: steps.read-destroy-config.outputs.destroy != 'true'
+        run: cd terraform && terraform apply "plan.tfplan"
