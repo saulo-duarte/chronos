@@ -1,0 +1,7 @@
+{
+  "region": "sa-east-1",
+  "lambda_function_name": "chronos-api",
+  "s3_bucket": "meu-bucket-artifacts",
+  "s3_key": "releases/bootstrap-v1.zip",
+  "parameter_store_key": "/chronos-api/latest-version"
+}
