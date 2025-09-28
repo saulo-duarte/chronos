@@ -74,7 +74,7 @@ jobs:
         run: |
           cd terraform && terraform init \
             -backend-config="bucket=${{ secrets.aws-statefile-s3-bucket }}" \
-            -backend-config="key=${{ github.event.repository.name }}.tfstate" \
+            -backend-config="key=chronos-serverless-api.tfstate" \
             -backend-config="region=${{ inputs.aws-region }}"
 
       - name: Terraform Validate
