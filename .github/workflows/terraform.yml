@@ -57,8 +57,7 @@ jobs:
           zip infra/bootstrap.zip bootstrap
 
       - name: Upload Lambda to S3
-        run: |
-          aws s3 cp infra/bootstrap.zip s3://${{ secrets.lambda-s3-bucket }}/${{ secrets.lambda-s3-key }} --region ${{ inputs.aws-region }}
+        run: aws s3 cp infra/bootstrap.zip s3://${{ secrets.lambda-s3-bucket }}/${{ secrets.lambda-s3-key }} --region ${{ inputs.aws-region }}
 
       - name: Read destroy configuration
         id: read-destroy-config
