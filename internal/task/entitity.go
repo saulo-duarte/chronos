@@ -12,7 +12,7 @@ import (
 
 type Task struct {
 	ID                    uuid.UUID             `gorm:"type:uuid;default:uuid_generate_v4()" json:"id"`
-	GoogleCalendarEventId string                `json:"googleCalendarEventId"`
+	GoogleCalendarEventID string                `json:"googleCalendarEventId"`
 	Name                  string                `json:"name"`
 	Description           string                `json:"description"`
 	Status                TaskStatus            `json:"status"`
