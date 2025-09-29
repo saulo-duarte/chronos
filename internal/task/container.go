@@ -1,6 +1,7 @@
 package task
 
 import (
+	googlecalendar "github.com/saulo-duarte/chronos-lambda/internal/google_calendar"
 	"github.com/saulo-duarte/chronos-lambda/internal/project"
 	studytopic "github.com/saulo-duarte/chronos-lambda/internal/study_topic"
 	"github.com/saulo-duarte/chronos-lambda/internal/user"
@@ -16,9 +17,10 @@ func NewTaskContainer(
 	projectService project.ProjectService,
 	studyTopicRepo studytopic.StudyTopicRepository,
 	userRepository user.UserRepository,
+	calendarService googlecalendar.CalendarService,
 ) *TaskContainer {
 	repo := NewRepository(db)
-	service := NewService(repo, projectService, userRepository, studyTopicRepo)
+	service := NewService(repo, projectService, userRepository, studyTopicRepo, calendarService)
 	handler := NewHandler(service)
 
 	return &TaskContainer{

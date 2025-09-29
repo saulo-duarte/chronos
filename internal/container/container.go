@@ -7,6 +7,7 @@ import (
 
 	"github.com/saulo-duarte/chronos-lambda/internal/auth"
 	"github.com/saulo-duarte/chronos-lambda/internal/config"
+	googlecalendar "github.com/saulo-duarte/chronos-lambda/internal/google_calendar"
 	"github.com/saulo-duarte/chronos-lambda/internal/project"
 	studysubject "github.com/saulo-duarte/chronos-lambda/internal/study_subject"
 	studytopic "github.com/saulo-duarte/chronos-lambda/internal/study_topic"
@@ -15,11 +16,12 @@ import (
 )
 
 type Container struct {
-	UserContainer         *user.UserContainer
-	ProjectContainer      *project.ProjectContainer
-	TaskContainer         *task.TaskContainer
-	StudySubjectContainer *studysubject.StudySubjectContainer
-	StudyTopicContainer   *studytopic.StudyTopicContainer
+	UserContainer           *user.UserContainer
+	ProjectContainer        *project.ProjectContainer
+	TaskContainer           *task.TaskContainer
+	StudySubjectContainer   *studysubject.StudySubjectContainer
+	StudyTopicContainer     *studytopic.StudyTopicContainer
+	GoogleCalendarContainer *googlecalendar.GoogleCalendarContainer
 }
 
 func New() *Container {
@@ -36,12 +38,14 @@ func New() *Container {
 	projectContainer := project.NewProjectContainer(config.DB)
 	studySubjectContainer := studysubject.NewStudySubjectContainer(config.DB)
 	studyTopicContainer := studytopic.NewStudyTopicContainer(config.DB)
+	calendarService := googlecalendar.NewGoogleCalendarContainer(userContainer.Repo)
 
 	taskContainer := task.NewTaskContainer(
 		config.DB,
 		projectContainer.Service,
 		studyTopicContainer.Repo,
 		userContainer.Repo,
+		calendarService.CalendarService,
 	)
 
 	return &Container{
