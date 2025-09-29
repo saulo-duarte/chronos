@@ -8,9 +8,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/saulo-duarte/chronos-lambda/internal/auth"
 	"github.com/saulo-duarte/chronos-lambda/internal/config"
+	googlecalendar "github.com/saulo-duarte/chronos-lambda/internal/google_calendar"
 	"github.com/saulo-duarte/chronos-lambda/internal/project"
 	studytopic "github.com/saulo-duarte/chronos-lambda/internal/study_topic"
 	"github.com/saulo-duarte/chronos-lambda/internal/user"
+	util "github.com/saulo-duarte/chronos-lambda/internal/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,18 +35,20 @@ type TaskService interface {
 }
 
 type taskService struct {
-	repo           TaskRepository
-	projectService project.ProjectService
-	userRepo       user.UserRepository
-	studyTopicRepo studytopic.StudyTopicRepository
+	repo            TaskRepository
+	projectService  project.ProjectService
+	userRepo        user.UserRepository
+	studyTopicRepo  studytopic.StudyTopicRepository
+	calendarService googlecalendar.CalendarService
 }
 
-func NewService(repo TaskRepository, projectService project.ProjectService, userRepo user.UserRepository, studyTopicRepo studytopic.StudyTopicRepository) TaskService {
+func NewService(repo TaskRepository, projectService project.ProjectService, userRepo user.UserRepository, studyTopicRepo studytopic.StudyTopicRepository, calendarService googlecalendar.CalendarService) TaskService {
 	return &taskService{
-		repo:           repo,
-		projectService: projectService,
-		userRepo:       userRepo,
-		studyTopicRepo: studyTopicRepo,
+		repo:            repo,
+		projectService:  projectService,
+		userRepo:        userRepo,
+		studyTopicRepo:  studyTopicRepo,
+		calendarService: calendarService,
 	}
 }
 
@@ -115,6 +119,26 @@ func (s *taskService) CreateTask(ctx context.Context, t *Task) (*Task, error) {
 		return nil, err
 	}
 
+	if t.StartDate != nil || t.DueDate != nil {
+		calTask := googlecalendar.CalendarTask{
+			ID:          t.ID,
+			Name:        t.Name,
+			Description: t.Description,
+			StartDate:   util.ToTimePtr(t.StartDate),
+			DueDate:     util.ToTimePtr(t.DueDate),
+		}
+
+		eventID, err := s.calendarService.AddEventToCalendar(ctx, t.UserID, &calTask)
+		if err != nil {
+			log.WithError(err).Warnf("Failed to add task %s to Google Calendar", t.ID)
+		} else if eventID != "" {
+			t.GoogleCalendarEventID = eventID
+			if err := s.repo.Update(t); err != nil {
+				log.WithError(err).Error("Failed to update task with Google Calendar Event ID")
+			}
+		}
+	}
+
 	log.WithField("task_id", t.ID).Info("Task created successfully")
 	return t, nil
 }
@@ -173,7 +197,8 @@ func (s *taskService) DeleteByID(ctx context.Context, id string) error {
 		return errors.New("invalid task id")
 	}
 
-	if _, err := s.repo.FindByIdAndUserId(taskID, userID); err != nil {
+	task, err := s.repo.FindByIdAndUserId(taskID, userID)
+	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			log.WithFields(logrus.Fields{
 				"task_id": id,
@@ -185,12 +210,21 @@ func (s *taskService) DeleteByID(ctx context.Context, id string) error {
 		return err
 	}
 
+	googleEventID := task.GoogleCalendarEventID
+
 	if err := s.repo.Delete(taskID, userID); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return ErrTaskNotFound
 		}
 		log.WithError(err).Error("Failed to delete task")
 		return err
+	}
+
+	if googleEventID != "" {
+		err := s.calendarService.DeleteEventFromCalendar(ctx, userID, googleEventID)
+		if err != nil {
+			log.WithError(err).Warnf("Failed to delete Google Calendar event %s for task %s", googleEventID, id)
+		}
 	}
 
 	log.WithField("task_id", id).Info("Task deleted successfully")
@@ -281,18 +315,25 @@ func (s *taskService) UpdateTask(ctx context.Context, t *Task) (*Task, error) {
 		return nil, err
 	}
 
+	updateCalendar := false
+
 	if t.StartDate != nil && (existing.StartDate == nil || !t.StartDate.Equal(*existing.StartDate)) {
 		existing.StartDate = t.StartDate
+		updateCalendar = true
 	}
 	if t.DueDate != nil && (existing.DueDate == nil || !t.DueDate.Equal(*existing.DueDate)) {
 		existing.DueDate = t.DueDate
+		updateCalendar = true
 	}
-	if t.Name != "" {
+	if t.Name != "" && existing.Name != t.Name {
 		existing.Name = t.Name
+		updateCalendar = true
 	}
-	if t.Description != "" {
+	if t.Description != "" && existing.Description != t.Description {
 		existing.Description = t.Description
+		updateCalendar = true
 	}
+
 	if t.Status != "" {
 		existing.Status = t.Status
 	}
@@ -304,6 +345,31 @@ func (s *taskService) UpdateTask(ctx context.Context, t *Task) (*Task, error) {
 	}
 
 	existing.UpdatedAt = time.Now()
+
+	if updateCalendar {
+		calTask := googlecalendar.CalendarTask{
+			ID:          existing.ID,
+			Name:        existing.Name,
+			Description: existing.Description,
+			StartDate:   util.ToTimePtr(existing.StartDate),
+			DueDate:     util.ToTimePtr(existing.DueDate),
+		}
+
+		if existing.GoogleCalendarEventID != "" {
+			calTask.GoogleCalendarEventID = &existing.GoogleCalendarEventID
+			err = s.calendarService.UpdateEventInCalendar(ctx, userID, &calTask)
+			if err != nil {
+				log.WithError(err).Warnf("Failed to update Google Calendar event for task %s", existing.ID)
+			}
+		} else if existing.StartDate != nil || existing.DueDate != nil {
+			eventID, err := s.calendarService.AddEventToCalendar(ctx, userID, &calTask)
+			if err != nil {
+				log.WithError(err).Warnf("Failed to add task %s to Google Calendar on update", existing.ID)
+			} else if eventID != "" {
+				existing.GoogleCalendarEventID = eventID
+			}
+		}
+	}
 
 	if err := s.repo.Update(existing); err != nil {
 		log.WithError(err).Error("Failed to update task")
