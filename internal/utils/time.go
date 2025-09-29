@@ -13,6 +13,14 @@ type LocalDateTime struct {
 
 const layout = "2006-01-02T15:04:05"
 
+func ToTimePtr(ldt *LocalDateTime) *time.Time {
+	if ldt == nil {
+		return nil
+	}
+	t := ldt.Time
+	return &t
+}
+
 func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `"`)
 	if s == "" || s == "null" {
@@ -33,19 +41,14 @@ func (ldt LocalDateTime) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + ldt.Format(layout) + `"`), nil
 }
 
-// Comparação ----------------------
-
 func (ldt LocalDateTime) Equal(other LocalDateTime) bool {
 	return ldt.Time.Equal(other.Time)
 }
-
-// Banco (GORM precisa disso) ----------------------
 
 func (ldt LocalDateTime) Value() (driver.Value, error) {
 	if ldt.IsZero() {
 		return nil, nil
 	}
-	// aqui retorna direto o time.Time → Postgres salva em TIMESTAMP
 	return ldt.Time, nil
 }
 
