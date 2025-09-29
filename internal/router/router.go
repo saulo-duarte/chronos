@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger"
 
 	"github.com/saulo-duarte/chronos-lambda/internal/auth"
 	"github.com/saulo-duarte/chronos-lambda/internal/middlewares"
@@ -31,6 +32,8 @@ func New(cfg RouterConfig) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middlewares.CorsMiddleware)
+
+	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", cfg.UserHandler.GoogleLogin)
