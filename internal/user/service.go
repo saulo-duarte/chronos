@@ -40,6 +40,21 @@ func (s *userService) LoginWithGoogleUser(ctx context.Context, authResult *auth.
 		return nil, "", "", err
 	}
 
+	encryptedAccessToken, err := config.Encrypt(authResult.AccessToken)
+	if err != nil {
+		log.WithError(err).Error("Falha ao criptografar Access Token do Google")
+		return nil, "", "", err
+	}
+
+	encryptedRefreshToken := ""
+	if authResult.RefreshToken != "" {
+		encryptedRefreshToken, err = config.Encrypt(authResult.RefreshToken)
+		if err != nil {
+			log.WithError(err).Error("Falha ao criptografar Refresh Token do Google")
+			return nil, "", "", err
+		}
+	}
+
 	if user == nil {
 		log.Info("Usuário não encontrado, criando novo usuário")
 		user = &User{
@@ -49,8 +64,8 @@ func (s *userService) LoginWithGoogleUser(ctx context.Context, authResult *auth.
 			Email:                       authResult.Email,
 			AvatarURL:                   authResult.Picture,
 			Role:                        "USER",
-			EncryptedGoogleAccessToken:  authResult.AccessToken,
-			EncryptedGoogleRefreshToken: authResult.RefreshToken,
+			EncryptedGoogleAccessToken:  encryptedAccessToken,
+			EncryptedGoogleRefreshToken: encryptedRefreshToken,
 			CreatedAt:                   time.Now(),
 			UpdatedAt:                   time.Now(),
 		}
@@ -64,8 +79,8 @@ func (s *userService) LoginWithGoogleUser(ctx context.Context, authResult *auth.
 		user.Username = authResult.Username
 		user.Email = authResult.Email
 		user.AvatarURL = authResult.Picture
-		user.EncryptedGoogleAccessToken = authResult.AccessToken
-		user.EncryptedGoogleRefreshToken = authResult.RefreshToken
+		user.EncryptedGoogleAccessToken = encryptedAccessToken
+		user.EncryptedGoogleRefreshToken = encryptedRefreshToken
 		user.UpdatedAt = time.Now()
 		if err := s.repo.Update(user); err != nil {
 			log.WithError(err).Error("Falha ao atualizar usuário existente")
