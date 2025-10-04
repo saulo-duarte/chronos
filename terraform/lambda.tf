@@ -38,7 +38,7 @@ resource "aws_lambda_function" "go_lambda" {
       GOOGLE_CLIENT_SECRET = data.aws_ssm_parameter.google_client_secret.value
       GOOGLE_REDIRECT_URL  = data.aws_ssm_parameter.google_redirect_url.value
       FRONTEND_URL         = data.aws_ssm_parameter.frontend_url.value
-      API_DOMAIN           = "api.chronosapp.site"
+      API_DOMAIN           = ".chronosapp.site"
       LOCAL_TEST           = "false"
       ENV                  = "prod"
     }
