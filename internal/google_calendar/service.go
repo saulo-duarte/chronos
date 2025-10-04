@@ -61,10 +61,20 @@ func (s *calendarService) getCalendarClient(ctx context.Context, userID uuid.UUI
 		return nil, ErrDecryptionFailed
 	}
 
+	refreshTokenEncrypted := u.EncryptedGoogleRefreshToken
+	refreshToken := ""
+	if refreshTokenEncrypted != "" {
+		refreshToken, err = config.Decrypt(refreshTokenEncrypted)
+		if err != nil {
+			log.WithError(err).Error("Failed to decrypt refresh token")
+			return nil, ErrDecryptionFailed
+		}
+	}
+
 	token := &oauth2.Token{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
-		RefreshToken: u.EncryptedGoogleRefreshToken,
+		RefreshToken: refreshToken,
 		Expiry:       time.Now().Add(-time.Hour),
 	}
 
