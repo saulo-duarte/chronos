@@ -13,6 +13,16 @@ type LocalDateTime struct {
 
 const layout = "2006-01-02T15:04:05"
 
+var saoPauloLocation *time.Location
+
+func init() {
+	var err error
+	saoPauloLocation, err = time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		saoPauloLocation = time.FixedZone("BRT", -3*60*60)
+	}
+}
+
 func ToTimePtr(ldt *LocalDateTime) *time.Time {
 	if ldt == nil {
 		return nil
@@ -26,7 +36,7 @@ func (ldt *LocalDateTime) UnmarshalJSON(b []byte) error {
 	if s == "" || s == "null" {
 		return nil
 	}
-	t, err := time.Parse(layout, s)
+	t, err := time.ParseInLocation(layout, s, saoPauloLocation)
 	if err != nil {
 		return err
 	}
@@ -38,7 +48,7 @@ func (ldt LocalDateTime) MarshalJSON() ([]byte, error) {
 	if ldt.IsZero() {
 		return []byte(`null`), nil
 	}
-	return []byte(`"` + ldt.Format(layout) + `"`), nil
+	return []byte(`"` + ldt.In(saoPauloLocation).Format(layout) + `"`), nil
 }
 
 func (ldt LocalDateTime) Equal(other LocalDateTime) bool {
@@ -63,14 +73,14 @@ func (ldt *LocalDateTime) Scan(value interface{}) error {
 		ldt.Time = v
 		return nil
 	case []byte:
-		parsed, err := time.Parse(layout, string(v))
+		parsed, err := time.ParseInLocation(layout, string(v), saoPauloLocation)
 		if err != nil {
 			return err
 		}
 		ldt.Time = parsed
 		return nil
 	case string:
-		parsed, err := time.Parse(layout, v)
+		parsed, err := time.ParseInLocation(layout, v, saoPauloLocation)
 		if err != nil {
 			return err
 		}
