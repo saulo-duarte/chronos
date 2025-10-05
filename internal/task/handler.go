@@ -18,6 +18,23 @@ func NewHandler(s TaskService) *Handler {
 	return &Handler{service: s}
 }
 
+func (h *Handler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
+	log := config.WithContext(r.Context())
+
+	stats, err := h.service.GetDashboardStats(r.Context())
+	if err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		log.WithError(err).Error("Erro ao buscar estatísticas do dashboard")
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	config.JSON(w, http.StatusOK, stats)
+}
+
 func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	log := config.WithContext(r.Context())
 
