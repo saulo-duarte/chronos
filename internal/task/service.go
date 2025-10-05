@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ type TaskService interface {
 	FindAllByProjectID(ctx context.Context, projectID string) ([]*Task, error)
 	FindAllByTopicID(ctx context.Context, topicID string) ([]*Task, error)
 	UpdateTask(ctx context.Context, t *Task) (*Task, error)
+	GetDashboardStats(ctx context.Context) (*DashboardStatsResponse, error)
 }
 
 type taskService struct {
@@ -378,4 +380,79 @@ func (s *taskService) UpdateTask(ctx context.Context, t *Task) (*Task, error) {
 
 	log.WithField("task_id", existing.ID).Info("Task updated successfully")
 	return existing, nil
+}
+
+func (s *taskService) GetDashboardStats(ctx context.Context) (*DashboardStatsResponse, error) {
+	log := config.WithContext(ctx)
+	userID, err := getUserIDFromContext(ctx, log, "get dashboard stats")
+	if err != nil {
+		return nil, err
+	}
+
+	tasks, err := s.repo.ListByUser(userID)
+	if err != nil {
+		log.WithError(err).Error("Failed to list all tasks for dashboard stats")
+		return nil, err
+	}
+
+	stats := TaskStats{Total: len(tasks)}
+	typeStats := TaskTypeStats{}
+	var tasksThisMonth []*Task
+
+	now := time.Now()
+	currentYear, currentMonth, _ := now.Date()
+
+	for _, task := range tasks {
+		if task.Status != "DONE" && task.DueDate != nil && task.DueDate.Time.Before(now) {
+			stats.Overdue++
+		}
+
+		switch task.Status {
+		case "TODO":
+			stats.Todo++
+		case "IN_PROGRESS":
+			stats.InProgress++
+		case "DONE":
+			stats.Done++
+		default:
+			stats.Todo++
+		}
+
+		switch task.Type {
+		case "EVENT":
+			typeStats.Event++
+		case "STUDY":
+			typeStats.Study++
+		case "PROJECT":
+			typeStats.Project++
+		}
+
+		if task.DueDate != nil {
+			dueYear, dueMonth, _ := task.DueDate.Time.Date()
+			if dueYear == currentYear && dueMonth == currentMonth {
+				tasksThisMonth = append(tasksThisMonth, task)
+			}
+		}
+	}
+
+	lastTasks := make([]*Task, len(tasks))
+	copy(lastTasks, tasks)
+
+	sort.Slice(lastTasks, func(i, j int) bool {
+		return lastTasks[i].CreatedAt.After(lastTasks[j].CreatedAt)
+	})
+
+	const limit = 5
+	if len(lastTasks) > limit {
+		lastTasks = lastTasks[:limit]
+	}
+
+	response := &DashboardStatsResponse{
+		Stats:     stats,
+		Type:      typeStats,
+		Month:     tasksThisMonth,
+		LastTasks: lastTasks,
+	}
+
+	return response, nil
 }
