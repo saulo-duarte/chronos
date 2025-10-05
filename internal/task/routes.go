@@ -9,6 +9,7 @@ func Routes(h *Handler) chi.Router {
 
 	r.Post("/", h.CreateTask)
 	r.Get("/{taskID}", h.GetTask)
+	r.Get("/dashboard/stats", h.GetDashboardStats)
 	r.Get("/", h.ListTasksByUser)
 	r.Get("/project/{projectID}", h.ListTasksByProject)
 	r.Put("/{taskID}", h.UpdateTask)
