@@ -47,6 +47,7 @@ func New(cfg RouterConfig) http.Handler {
 		r.Mount("/tasks", task.Routes(cfg.TaskHandler))
 		r.Mount("/study-subjects", studysubject.Routes(cfg.StudySubjectHandler))
 		r.Mount("/study-topics", studytopic.Routes(cfg.StudyTopicHandler))
+		r.Mount("/users", user.Routes(cfg.UserHandler))
 
 		r.Get("/study-subjects/{studySubjectId}/topics", cfg.StudyTopicHandler.ListStudyTopics)
 		r.Get("/study-topics/{studyTopicId}/tasks", cfg.TaskHandler.ListTasksByStudyTopic)
