@@ -18,6 +18,7 @@ type UserService interface {
 	LoginWithGoogleUser(ctx context.Context, authResult *auth.AuthResult) (*User, string, string, error)
 	Login(ctx context.Context, providerID string) (*User, string, string, error)
 	RefreshToken(ctx context.Context, tokenString string) (string, error)
+	GetByID(ctx context.Context, userID string) (*User, error)
 }
 
 type userService struct {
@@ -26,6 +27,18 @@ type userService struct {
 
 func NewService(repo UserRepository) UserService {
 	return &userService{repo: repo}
+}
+
+func (s *userService) GetByID(ctx context.Context, userID string) (*User, error) {
+	log := config.WithContext(ctx)
+
+	user, err := s.repo.GetByID(userID)
+	if err != nil {
+		log.WithError(err).Error("Erro ao buscar usuário por ID")
+		return nil, err
+	}
+
+	return user, nil
 }
 
 func (s *userService) LoginWithGoogleUser(ctx context.Context, authResult *auth.AuthResult) (*User, string, string, error) {

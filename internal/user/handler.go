@@ -40,9 +40,6 @@ func newCookie(name, value string, maxAge int) *http.Cookie {
 func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	log := config.WithContext(r.Context())
 
-	// LOG DE DEBUG ADICIONADO AQUI
-	log.WithField("API_DOMAIN_CONFIG", API_DOMAIN).Info("Verificando a variável API_DOMAIN antes de setar o cookie")
-
 	var payload auth.AuthResult
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		log.WithError(err).Error("Corpo da requisição inválido")
@@ -99,4 +96,33 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	config.JSON(w, http.StatusOK, map[string]string{
 		"message": "token refreshed successfully",
 	})
+}
+
+func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
+	log := config.WithContext(r.Context())
+
+	claims, err := auth.GetUserClaimsFromContext(r.Context())
+	if err != nil {
+		log.WithError(err).Error("Falha ao obter claims do contexto")
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	userID := claims.UserID
+
+	if userID == "" {
+		http.Error(w, "userID is required", http.StatusBadRequest)
+		return
+	}
+	user, err := h.service.GetByID(r.Context(), userID)
+	if err != nil {
+		log.WithError(err).Error("Erro ao buscar usuário")
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if user == nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	config.JSON(w, http.StatusOK, user.ToResponse())
 }
