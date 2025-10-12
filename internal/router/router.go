@@ -38,6 +38,7 @@ func New(cfg RouterConfig) http.Handler {
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", cfg.UserHandler.GoogleLogin)
 		r.Post("/refresh", cfg.UserHandler.RefreshToken)
+		r.Post("/logout", auth.NewHandler().Logout)
 	})
 
 	r.Group(func(r chi.Router) {
