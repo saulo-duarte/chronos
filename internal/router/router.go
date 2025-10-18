@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
 
+	"github.com/saulo-duarte/chronos-lambda/internal/aiquiz"
 	"github.com/saulo-duarte/chronos-lambda/internal/auth"
 	"github.com/saulo-duarte/chronos-lambda/internal/middlewares"
 	"github.com/saulo-duarte/chronos-lambda/internal/project"
@@ -22,6 +23,7 @@ type RouterConfig struct {
 	TaskHandler         *task.Handler
 	StudySubjectHandler *studysubject.Handler
 	StudyTopicHandler   *studytopic.Handler
+	AIQuizHandler       *aiquiz.Handler
 }
 
 func New(cfg RouterConfig) http.Handler {
@@ -34,6 +36,10 @@ func New(cfg RouterConfig) http.Handler {
 	r.Use(middlewares.CorsMiddleware)
 
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
+
+	r.Route("/ai-quiz", func(r chi.Router) {
+		r.Mount("/", aiquiz.Routes(cfg.AIQuizHandler))
+	})
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", cfg.UserHandler.GoogleLogin)

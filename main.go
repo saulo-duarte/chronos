@@ -27,6 +27,7 @@ func init() {
 		TaskHandler:         c.TaskContainer.Handler,
 		StudySubjectHandler: c.StudySubjectContainer.Handler,
 		StudyTopicHandler:   c.StudyTopicContainer.Handler,
+		AIQuizHandler:       c.AIQuizContainer.Handler,
 	})
 
 	chiRouter = r.(*chi.Mux)

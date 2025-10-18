@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/saulo-duarte/chronos-lambda/internal/aiquiz"
 	"github.com/saulo-duarte/chronos-lambda/internal/auth"
 	"github.com/saulo-duarte/chronos-lambda/internal/config"
 	googlecalendar "github.com/saulo-duarte/chronos-lambda/internal/google_calendar"
@@ -22,6 +23,7 @@ type Container struct {
 	StudySubjectContainer   *studysubject.StudySubjectContainer
 	StudyTopicContainer     *studytopic.StudyTopicContainer
 	GoogleCalendarContainer *googlecalendar.GoogleCalendarContainer
+	AIQuizContainer         *aiquiz.AIQuizContainer
 }
 
 func New() *Container {
@@ -39,6 +41,7 @@ func New() *Container {
 	studySubjectContainer := studysubject.NewStudySubjectContainer(config.DB)
 	studyTopicContainer := studytopic.NewStudyTopicContainer(config.DB)
 	calendarService := googlecalendar.NewGoogleCalendarContainer(userContainer.Repo)
+	aiQuizContainer := aiquiz.NewAIQuizContainer()
 
 	taskContainer := task.NewTaskContainer(
 		config.DB,
@@ -54,5 +57,6 @@ func New() *Container {
 		TaskContainer:         taskContainer,
 		StudySubjectContainer: studySubjectContainer,
 		StudyTopicContainer:   studyTopicContainer,
+		AIQuizContainer:       aiQuizContainer,
 	}
 }
