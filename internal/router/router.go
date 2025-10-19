@@ -11,6 +11,7 @@ import (
 	"github.com/saulo-duarte/chronos-lambda/internal/auth"
 	"github.com/saulo-duarte/chronos-lambda/internal/middlewares"
 	"github.com/saulo-duarte/chronos-lambda/internal/project"
+	"github.com/saulo-duarte/chronos-lambda/internal/quiz"
 	studysubject "github.com/saulo-duarte/chronos-lambda/internal/study_subject"
 	studytopic "github.com/saulo-duarte/chronos-lambda/internal/study_topic"
 	"github.com/saulo-duarte/chronos-lambda/internal/task"
@@ -24,6 +25,7 @@ type RouterConfig struct {
 	StudySubjectHandler *studysubject.Handler
 	StudyTopicHandler   *studytopic.Handler
 	AIQuizHandler       *aiquiz.Handler
+	QuizHandler         *quiz.Handler
 }
 
 func New(cfg RouterConfig) http.Handler {
@@ -55,6 +57,7 @@ func New(cfg RouterConfig) http.Handler {
 		r.Mount("/study-subjects", studysubject.Routes(cfg.StudySubjectHandler))
 		r.Mount("/study-topics", studytopic.Routes(cfg.StudyTopicHandler))
 		r.Mount("/users", user.Routes(cfg.UserHandler))
+		r.Mount("/quizzes", quiz.Routes(cfg.QuizHandler))
 
 		r.Get("/study-subjects/{studySubjectId}/topics", cfg.StudyTopicHandler.ListStudyTopics)
 		r.Get("/study-topics/{studyTopicId}/tasks", cfg.TaskHandler.ListTasksByStudyTopic)
