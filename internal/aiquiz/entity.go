@@ -6,6 +6,7 @@ type Question struct {
 	Pergunta        string   `json:"pergunta"`
 	Alternativas    []string `json:"alternativas"`
 	RespostaCorreta string   `json:"resposta_correta"`
+	Explicacao      string   `json:"explicacao"`
 }
 
 type QuestionRequest struct {
