@@ -10,6 +10,7 @@ import (
 
 type GoogleCalendarContainer struct {
 	CalendarService CalendarService
+	CalendarManager CalendarManager
 }
 
 func NewGoogleCalendarContainer(
@@ -31,8 +32,10 @@ func NewGoogleCalendarContainer(
 	}
 
 	calendarService := NewCalendarService(userRepo, oauthConfig)
+	calendarManager := NewCalendarManager(calendarService)
 
 	return &GoogleCalendarContainer{
 		CalendarService: calendarService,
+		CalendarManager: calendarManager,
 	}
 }
