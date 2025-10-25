@@ -10,9 +10,10 @@ type Question struct {
 }
 
 type QuestionRequest struct {
-	Tema        string `json:"tema"`
-	Dificuldade string `json:"dificuldade"`
-	Quantidade  int    `json:"quantidade"`
+	Tema          string `json:"tema"`
+	Dificuldade   string `json:"dificuldade"`
+	Quantidade    int    `json:"quantidade"`
+	ContextoProva string `json:"contexto_prova"`
 }
 
 type QuestionResponse struct {
