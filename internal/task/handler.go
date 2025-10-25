@@ -111,7 +111,7 @@ func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "taskID")
 
-	var payload Task
+	var payload TaskUpdateDTO
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		log.WithError(err).Error("Corpo da requisição inválido")
 		http.Error(w, "invalid request body", http.StatusBadRequest)

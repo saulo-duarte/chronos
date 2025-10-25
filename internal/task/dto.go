@@ -1,5 +1,11 @@
 package task
 
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
 type TaskStats struct {
 	Total      int `json:"total"`
 	Todo       int `json:"todo"`
@@ -19,4 +25,16 @@ type DashboardStatsResponse struct {
 	Type      TaskTypeStats `json:"type"`
 	Month     []*Task       `json:"month"`
 	LastTasks []*Task       `json:"last_tasks"`
+}
+
+type TaskUpdateDTO struct {
+	ID            uuid.UUID    `json:"id"`
+	Name          string       `json:"name"`
+	Description   string       `json:"description"`
+	Status        TaskStatus   `json:"status"`
+	Priority      TaskPriority `json:"priority"`
+	StartDate     time.Time    `json:"startDate"`
+	DueDate       time.Time    `json:"dueDate"`
+	RemoveDueDate bool         `json:"removeDueDate"`
+	DoneAt        time.Time    `json:"doneAt"`
 }
