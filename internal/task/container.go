@@ -17,10 +17,10 @@ func NewTaskContainer(
 	projectService project.ProjectService,
 	studyTopicRepo studytopic.StudyTopicRepository,
 	userRepository user.UserRepository,
-	calendarService googlecalendar.CalendarService,
+	calendarManager googlecalendar.CalendarManager,
 ) *TaskContainer {
 	repo := NewRepository(db)
-	service := NewService(repo, projectService, userRepository, studyTopicRepo, calendarService)
+	service := NewService(repo, projectService, userRepository, studyTopicRepo, calendarManager)
 	handler := NewHandler(service)
 
 	return &TaskContainer{

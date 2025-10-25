@@ -42,7 +42,7 @@ func New() *Container {
 	projectContainer := project.NewProjectContainer(config.DB)
 	studySubjectContainer := studysubject.NewStudySubjectContainer(config.DB)
 	studyTopicContainer := studytopic.NewStudyTopicContainer(config.DB)
-	calendarService := googlecalendar.NewGoogleCalendarContainer(userContainer.Repo)
+	calendarContainer := googlecalendar.NewGoogleCalendarContainer(userContainer.Repo)
 	aiQuizContainer := aiquiz.NewAIQuizContainer()
 	quizContainer := quiz.NewQuizContainer(config.DB)
 
@@ -51,7 +51,7 @@ func New() *Container {
 		projectContainer.Service,
 		studyTopicContainer.Repo,
 		userContainer.Repo,
-		calendarService.CalendarService,
+		calendarContainer.CalendarManager,
 	)
 
 	return &Container{
