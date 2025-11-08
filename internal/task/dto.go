@@ -1,9 +1,8 @@
 package task
 
 import (
-	"time"
-
 	"github.com/google/uuid"
+	util "github.com/saulo-duarte/chronos-lambda/internal/utils"
 )
 
 type TaskStats struct {
@@ -28,13 +27,13 @@ type DashboardStatsResponse struct {
 }
 
 type TaskUpdateDTO struct {
-	ID            uuid.UUID    `json:"id"`
-	Name          string       `json:"name"`
-	Description   string       `json:"description"`
-	Status        TaskStatus   `json:"status"`
-	Priority      TaskPriority `json:"priority"`
-	StartDate     time.Time    `json:"startDate"`
-	DueDate       time.Time    `json:"dueDate"`
-	RemoveDueDate bool         `json:"removeDueDate"`
-	DoneAt        time.Time    `json:"doneAt"`
+	ID            uuid.UUID          `json:"id"`
+	Name          string             `json:"name"`
+	Description   string             `json:"description"`
+	Status        TaskStatus         `json:"status"`
+	Priority      TaskPriority       `json:"priority"`
+	StartDate     util.LocalDateTime `json:"startDate"`
+	DueDate       util.LocalDateTime `json:"dueDate"`
+	RemoveDueDate bool               `json:"removeDueDate"`
+	DoneAt        util.LocalDateTime `json:"doneAt"`
 }
