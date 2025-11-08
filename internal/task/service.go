@@ -14,7 +14,6 @@ import (
 	studytopic "github.com/saulo-duarte/chronos-lambda/internal/study_topic"
 	"github.com/saulo-duarte/chronos-lambda/internal/user"
 	util "github.com/saulo-duarte/chronos-lambda/internal/utils"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -23,6 +22,7 @@ var (
 	ErrProjectNotFound    = project.ErrProjectNotFound
 	ErrStudyTopicNotFound = studytopic.ErrStudyTopicNotFound
 	ErrInvalidID          = errors.New("invalid id format")
+	ErrProjectRequired    = errors.New("projectId is required for PROJECT tasks")
 )
 
 const dashboardTaskLimit = 5
@@ -73,7 +73,7 @@ func (s *taskService) CreateTask(ctx context.Context, t *Task) (*Task, error) {
 	t.UpdatedAt = time.Now()
 	t.UserID = userID
 
-	if err := s.validateDependencies(ctx, t); err != nil {
+	if err := s.validateTaskDependencies(ctx, t); err != nil {
 		return nil, err
 	}
 
@@ -83,7 +83,6 @@ func (s *taskService) CreateTask(ctx context.Context, t *Task) (*Task, error) {
 	}
 
 	s.syncWithCalendar(ctx, userID, t)
-
 	config.WithContext(ctx).WithField("task_id", t.ID).Info("Task created successfully")
 	return t, nil
 }
@@ -109,12 +108,12 @@ func (s *taskService) FindByID(ctx context.Context, id string) (*Task, error) {
 		return nil, err
 	}
 
-	taskID, err := s.parseID(ctx, id, "task")
+	taskID, err := s.parseUUID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.findTask(ctx, taskID, userID)
+	return s.getTaskByID(ctx, taskID, userID)
 }
 
 func (s *taskService) DeleteByID(ctx context.Context, id string) error {
@@ -123,12 +122,12 @@ func (s *taskService) DeleteByID(ctx context.Context, id string) error {
 		return err
 	}
 
-	taskID, err := s.parseID(ctx, id, "task")
+	taskID, err := s.parseUUID(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	task, err := s.findTask(ctx, taskID, userID)
+	task, err := s.getTaskByID(ctx, taskID, userID)
 	if err != nil {
 		return err
 	}
@@ -155,12 +154,12 @@ func (s *taskService) FindAllByProjectID(ctx context.Context, projectID string) 
 		return nil, err
 	}
 
-	pid, err := s.parseID(ctx, projectID, "project")
+	pid, err := s.parseUUID(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.validateProject(ctx, &pid); err != nil {
+	if err := s.validateProjectExists(ctx, pid); err != nil {
 		return nil, err
 	}
 
@@ -179,12 +178,12 @@ func (s *taskService) FindAllByTopicID(ctx context.Context, topicID string) ([]*
 		return nil, err
 	}
 
-	tid, err := s.parseID(ctx, topicID, "study topic")
+	tid, err := s.parseUUID(ctx, topicID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.validateStudyTopic(ctx, &tid); err != nil {
+	if err := s.validateTopicExists(ctx, tid); err != nil {
 		return nil, err
 	}
 
@@ -203,12 +202,12 @@ func (s *taskService) UpdateTask(ctx context.Context, dto *TaskUpdateDTO) (*Task
 		return nil, err
 	}
 
-	task, err := s.findTask(ctx, dto.ID, userID)
+	task, err := s.getTaskByID(ctx, dto.ID, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	needsCalendarSync := s.applyUpdates(task, dto)
+	needsCalendarSync := s.applyTaskUpdates(task, dto)
 	task.UpdatedAt = time.Now()
 
 	if err := s.repo.Update(task); err != nil {
@@ -239,6 +238,8 @@ func (s *taskService) GetDashboardStats(ctx context.Context) (*DashboardStatsRes
 	return s.buildDashboardStats(tasks), nil
 }
 
+// ============= Helper Methods =============
+
 func (s *taskService) getUserID(ctx context.Context) (uuid.UUID, error) {
 	claims, err := auth.GetUserClaimsFromContext(ctx)
 	if err != nil {
@@ -248,88 +249,73 @@ func (s *taskService) getUserID(ctx context.Context) (uuid.UUID, error) {
 	return uuid.MustParse(claims.UserID), nil
 }
 
-func (s *taskService) parseID(ctx context.Context, id, entityName string) (uuid.UUID, error) {
+func (s *taskService) parseUUID(ctx context.Context, id string) (uuid.UUID, error) {
 	parsedID, err := uuid.Parse(id)
 	if err != nil {
-		config.WithContext(ctx).WithError(err).Warnf("Invalid %s ID: %s", entityName, id)
+		config.WithContext(ctx).WithError(err).Warnf("Invalid ID: %s", id)
 		return uuid.Nil, ErrInvalidID
 	}
 	return parsedID, nil
 }
 
-func (s *taskService) findTask(ctx context.Context, taskID, userID uuid.UUID) (*Task, error) {
+func (s *taskService) getTaskByID(ctx context.Context, taskID, userID uuid.UUID) (*Task, error) {
 	task, err := s.repo.FindByIdAndUserId(taskID, userID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			config.WithContext(ctx).WithFields(logrus.Fields{
-				"task_id": taskID,
-				"user_id": userID,
-			}).Warn("Task not found or unauthorized")
 			return nil, ErrTaskNotFound
 		}
 		config.WithContext(ctx).WithError(err).Error("Error finding task")
 		return nil, err
 	}
-
 	return task, nil
 }
 
-func (s *taskService) validateProject(ctx context.Context, projectID *uuid.UUID) error {
-	if projectID == nil {
-		return nil
-	}
-
+func (s *taskService) validateProjectExists(ctx context.Context, projectID uuid.UUID) error {
 	if _, err := s.projectService.GetProjectByID(ctx, projectID.String()); err != nil {
-		config.WithContext(ctx).WithError(err).WithField("project_id", projectID).Error("Project validation failed")
+		config.WithContext(ctx).WithError(err).WithField("project_id", projectID).Error("Project not found")
 		return ErrProjectNotFound
 	}
-
 	return nil
 }
 
-func (s *taskService) validateStudyTopic(ctx context.Context, topicID *uuid.UUID) error {
-	if topicID == nil {
-		return nil
-	}
-
+func (s *taskService) validateTopicExists(ctx context.Context, topicID uuid.UUID) error {
 	if _, err := s.studyTopicRepo.GetByID(topicID.String()); err != nil {
-		config.WithContext(ctx).WithError(err).WithField("study_topic_id", topicID).Error("Study topic validation failed")
+		config.WithContext(ctx).WithError(err).WithField("study_topic_id", topicID).Error("Study topic not found")
 		return ErrStudyTopicNotFound
 	}
+	return nil
+}
+
+func (s *taskService) validateTaskDependencies(ctx context.Context, t *Task) error {
+	if t.Type == "PROJECT" && t.ProjectId == nil {
+		return ErrProjectRequired
+	}
+
+	if t.ProjectId != nil {
+		if err := s.validateProjectExists(ctx, *t.ProjectId); err != nil {
+			return err
+		}
+	}
+
+	if t.StudyTopicId != nil {
+		if err := s.validateTopicExists(ctx, *t.StudyTopicId); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
-func (s *taskService) validateDependencies(ctx context.Context, t *Task) error {
-	if t.Type == "PROJECT" && t.ProjectId == nil {
-		return errors.New("projectId is required for PROJECT tasks")
-	}
-
-	if err := s.validateProject(ctx, t.ProjectId); err != nil {
-		return err
-	}
-
-	return s.validateStudyTopic(ctx, t.StudyTopicId)
-}
-
-func (s *taskService) toCalendarTask(t *Task) *googlecalendar.CalendarTask {
-	var eventID *string
-	if t.GoogleCalendarEventID != "" {
-		eventID = &t.GoogleCalendarEventID
-	}
-
-	return &googlecalendar.CalendarTask{
+func (s *taskService) syncWithCalendar(ctx context.Context, userID uuid.UUID, t *Task) {
+	calTask := &googlecalendar.CalendarTask{
 		ID:                    t.ID,
 		Name:                  t.Name,
 		Description:           t.Description,
 		StartDate:             util.ToTimePtr(t.StartDate),
 		DueDate:               util.ToTimePtr(t.DueDate),
-		GoogleCalendarEventID: eventID,
+		GoogleCalendarEventID: s.getEventIDPtr(t.GoogleCalendarEventID),
 	}
-}
 
-func (s *taskService) syncWithCalendar(ctx context.Context, userID uuid.UUID, t *Task) {
-	calTask := s.toCalendarTask(t)
 	eventID, err := s.calendarManager.SyncTask(ctx, userID, calTask)
 	if err != nil {
 		config.WithContext(ctx).WithError(err).Warnf("Calendar sync failed for task %s", t.ID)
@@ -344,67 +330,68 @@ func (s *taskService) syncWithCalendar(ctx context.Context, userID uuid.UUID, t 
 	}
 }
 
-func (s *taskService) applyUpdates(task *Task, dto *TaskUpdateDTO) bool {
-	needsCalendarSync := false
-
-	needsCalendarSync = s.updateStringField(&task.Name, dto.Name) || needsCalendarSync
-	needsCalendarSync = s.updateStringField(&task.Description, dto.Description) || needsCalendarSync
-	s.updateTaskStatus(&task.Status, dto.Status)
-	s.updateTaskPriority(&task.Priority, dto.Priority)
-
-	needsCalendarSync = s.updateDateField(&task.StartDate, dto.StartDate) || needsCalendarSync
-	needsCalendarSync = s.updateDueDate(task, dto) || needsCalendarSync
-
-	if !dto.DoneAt.IsZero() {
-		task.DoneAt = dto.DoneAt
+func (s *taskService) getEventIDPtr(eventID string) *string {
+	if eventID == "" {
+		return nil
 	}
-
-	return needsCalendarSync
+	return &eventID
 }
 
-func (s *taskService) updateStringField(field *string, newValue string) bool {
-	if newValue != "" && newValue != *field {
-		*field = newValue
-		return true
-	}
-	return false
-}
+func (s *taskService) applyTaskUpdates(task *Task, dto *TaskUpdateDTO) bool {
+	needsSync := false
 
-func (s *taskService) updateTaskStatus(field *TaskStatus, newValue TaskStatus) {
-	if newValue != "" && newValue != *field {
-		*field = newValue
-	}
-}
-
-func (s *taskService) updateTaskPriority(field *TaskPriority, newValue TaskPriority) {
-	if newValue != "" && newValue != *field {
-		*field = newValue
-	}
-}
-
-func (s *taskService) updateDateField(field **util.LocalDateTime, newValue time.Time) bool {
-	if newValue.IsZero() {
-		return false
+	if dto.Name != "" && dto.Name != task.Name {
+		task.Name = dto.Name
+		needsSync = true
 	}
 
-	newDate := util.LocalDateTime{Time: newValue}
-	if *field == nil || !(*field).Equal(newDate) {
-		*field = &newDate
-		return true
+	if dto.Description != "" && dto.Description != task.Description {
+		task.Description = dto.Description
+		needsSync = true
 	}
-	return false
-}
 
-func (s *taskService) updateDueDate(task *Task, dto *TaskUpdateDTO) bool {
+	if dto.Status != "" && dto.Status != task.Status {
+		task.Status = dto.Status
+	}
+
+	if dto.Priority != "" && dto.Priority != task.Priority {
+		task.Priority = dto.Priority
+	}
+
+	if s.updateDate(&task.StartDate, &dto.StartDate) {
+		needsSync = true
+	}
+
 	if dto.RemoveDueDate {
 		if task.DueDate != nil {
 			task.DueDate = nil
-			return true
+			needsSync = true
 		}
+	} else if s.updateDate(&task.DueDate, &dto.DueDate) {
+		needsSync = true
+	}
+
+	if !dto.DoneAt.IsZero() {
+		if t := util.ToTimePtr(&dto.DoneAt); t != nil {
+			task.DoneAt = *t
+		}
+	}
+
+	return needsSync
+}
+
+func (s *taskService) updateDate(field **util.LocalDateTime, newValue *util.LocalDateTime) bool {
+	if newValue == nil || newValue.IsZero() {
 		return false
 	}
 
-	return s.updateDateField(&task.DueDate, dto.DueDate)
+	if *field == nil || !(*field).Equal(*newValue) {
+		copied := *newValue
+		*field = &copied
+		return true
+	}
+
+	return false
 }
 
 func (s *taskService) buildDashboardStats(tasks []*Task) *DashboardStatsResponse {
@@ -416,24 +403,23 @@ func (s *taskService) buildDashboardStats(tasks []*Task) *DashboardStatsResponse
 	currentYear, currentMonth, _ := now.Date()
 
 	for _, task := range tasks {
-		s.updateTaskStats(task, &stats, &typeStats, now)
-		s.addTaskIfCurrentMonth(task, &tasksThisMonth, currentYear, currentMonth)
+		s.countTaskByStatus(task, &stats, now)
+		s.countTaskByType(task, &typeStats)
+
+		if s.isTaskInCurrentMonth(task, currentYear, currentMonth) {
+			tasksThisMonth = append(tasksThisMonth, task)
+		}
 	}
 
 	return &DashboardStatsResponse{
 		Stats:     stats,
 		Type:      typeStats,
 		Month:     tasksThisMonth,
-		LastTasks: s.getLastTasks(tasks),
+		LastTasks: s.getRecentTasks(tasks),
 	}
 }
 
-func (s *taskService) updateTaskStats(task *Task, stats *TaskStats, typeStats *TaskTypeStats, now time.Time) {
-	s.updateStatusStats(task, stats, now)
-	s.updateTypeStats(task, typeStats)
-}
-
-func (s *taskService) updateStatusStats(task *Task, stats *TaskStats, now time.Time) {
+func (s *taskService) countTaskByStatus(task *Task, stats *TaskStats, now time.Time) {
 	switch task.Status {
 	case "TODO":
 		stats.Todo++
@@ -450,7 +436,7 @@ func (s *taskService) updateStatusStats(task *Task, stats *TaskStats, now time.T
 	}
 }
 
-func (s *taskService) updateTypeStats(task *Task, typeStats *TaskTypeStats) {
+func (s *taskService) countTaskByType(task *Task, typeStats *TaskTypeStats) {
 	switch task.Type {
 	case "EVENT":
 		typeStats.Event++
@@ -461,38 +447,29 @@ func (s *taskService) updateTypeStats(task *Task, typeStats *TaskTypeStats) {
 	}
 }
 
-func (s *taskService) addTaskIfCurrentMonth(task *Task, tasksThisMonth *[]*Task, year int, month time.Month) {
+func (s *taskService) isTaskInCurrentMonth(task *Task, year int, month time.Month) bool {
 	if task.DueDate == nil {
-		return
+		return false
 	}
-
 	dueYear, dueMonth, _ := task.DueDate.Time.Date()
-	if dueYear == year && dueMonth == month {
-		*tasksThisMonth = append(*tasksThisMonth, task)
-	}
+	return dueYear == year && dueMonth == month
 }
 
-func (s *taskService) getLastTasks(tasks []*Task) []*Task {
+func (s *taskService) getRecentTasks(tasks []*Task) []*Task {
 	if len(tasks) == 0 {
 		return []*Task{}
 	}
 
-	sortedTasks := s.sortTasksByCreatedAt(tasks)
-
-	if len(sortedTasks) > dashboardTaskLimit {
-		return sortedTasks[:dashboardTaskLimit]
-	}
-
-	return sortedTasks
-}
-
-func (s *taskService) sortTasksByCreatedAt(tasks []*Task) []*Task {
 	sorted := make([]*Task, len(tasks))
 	copy(sorted, tasks)
 
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].CreatedAt.After(sorted[j].CreatedAt)
 	})
+
+	if len(sorted) > dashboardTaskLimit {
+		return sorted[:dashboardTaskLimit]
+	}
 
 	return sorted
 }
