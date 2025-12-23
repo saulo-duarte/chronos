@@ -8,6 +8,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 
 	"github.com/saulo-duarte/chronos-lambda/internal/aiquiz"
+	"github.com/saulo-duarte/chronos-lambda/internal/annual_goal"
 	"github.com/saulo-duarte/chronos-lambda/internal/auth"
 	"github.com/saulo-duarte/chronos-lambda/internal/middlewares"
 	"github.com/saulo-duarte/chronos-lambda/internal/project"
@@ -26,6 +27,7 @@ type RouterConfig struct {
 	StudyTopicHandler   *studytopic.Handler
 	AIQuizHandler       *aiquiz.Handler
 	QuizHandler         *quiz.Handler
+	AnnualGoalHandler   *annual_goal.Handler
 }
 
 func New(cfg RouterConfig) http.Handler {
@@ -58,6 +60,7 @@ func New(cfg RouterConfig) http.Handler {
 		r.Mount("/study-topics", studytopic.Routes(cfg.StudyTopicHandler))
 		r.Mount("/users", user.Routes(cfg.UserHandler))
 		r.Mount("/quizzes", quiz.Routes(cfg.QuizHandler))
+		r.Mount("/annual-goals", annual_goal.Routes(cfg.AnnualGoalHandler))
 
 		r.Get("/study-subjects/{studySubjectId}/topics", cfg.StudyTopicHandler.ListStudyTopics)
 		r.Get("/study-topics/{studyTopicId}/tasks", cfg.TaskHandler.ListTasksByStudyTopic)
